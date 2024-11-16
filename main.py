@@ -14,6 +14,7 @@ def onAppStart(app):
     app.fruitSpawnInterval = 100
     app.elapsedTime = 0
 
+
 # Fruit Object 
 class Fruit:
     def __init__(self, app, x, y, vX, vY, color, radius):
@@ -28,10 +29,12 @@ class Fruit:
         self.app = app
 
     def move(self):
-        gravity = 125/(0.8 * self.app.stepsPerSecond)
-        self.time += 1/(self.app.stepsPerSecond)  # Increment time (adjust step size as needed)
-        self.x, self.y = calculateProjectileMotion(self.x, self.y, self.vX, self.vY, gravity, self.time)
-
+        self.time += 1 / self.app.stepsPerSecond
+        if self.time >= .5:
+            gravity = 350 / self.app.stepsPerSecond
+        else: # Create initial push
+            gravity = -30 / (1+self.time)
+        self.x, self.y, = calculateProjectileMotion(self.x, self.y, self.vX, self.vY, gravity, self.time)
 # Store
 class FruitStore:
     def __init__(self):
@@ -57,8 +60,10 @@ class GameController:
         radius = 30
         x = randint(radius, self.app.width - radius)
         y = self.app.height + radius
-        vX = randint(-2, 2)
-        vY = (-randint(200, 250))/(1.2 * self.app.stepsPerSecond)
+        vX = uniform(0.5, 2)
+        vY = (-randint(360, 380))/(self.app.stepsPerSecond)
+        xCenter = self.app.width / 2
+        vX *= (xCenter - x) / (self.app.width/2.5)
         color = choice(['red', 'green', 'yellow', 'orange'])
         vY *= self.speedMultiplier
         fruit = Fruit(self.app, x, y, vX, vY, color, radius)
@@ -71,10 +76,10 @@ class GameController:
             fruit.x + fruit.radius < 0 or        
             fruit.x - fruit.radius > self.app.width): 
                 self.store.removeFruit(fruit)
-    def adjustSpeed(self):
-        fluctuation = uniform(0.95, 1.05)
-        self.speedMultiplier *= fluctuation
-        
+    # def adjustSpeed(self):
+    #     fluctuation = uniform(0.95, 1.1)
+    #     self.speedMultiplier *= fluctuation
+    #     if self.speedMultiplier 
 
         
 
@@ -88,16 +93,20 @@ def redrawAll(app):
 def drawFruit(fruit):
     drawCircle(fruit.x, fruit.y, fruit.radius, fill=fruit.color)
 
-def calculateProjectileMotion(x0, y0, vX, vY, gravity, time):
-    x = x0 + vX * time
-    y = y0 + vY * time + 0.5 * gravity * time**2
-    return x, y
+# def drawLives(app):
+#     crossX = 20
+#     crossY = 
+#     for i in range(3):
+#         if i < app.strikes:
+#             drawRedCross()
+#         else:
+#             drawHollowCross()
 
 # Function to update the game state
 def onStep(app):
     if app.strikes >= 3:
         app.gameOver = True
-        return
+        gameOver()
     # app.elapsedTime += 1 / app.stepsPerSecond
     # app.spawnInterval = max(50, 100 - int(app.elapsedTime * 1.5)) 
     # app.controller.updateFruits()
@@ -117,8 +126,16 @@ def onMouseMove(app, mouseX, mouseY):
             app.score += 1
             break
 
+def calculateProjectileMotion(x0, y0, vX, vY, gravity, time):
+    x = x0 + vX * time
+    y = y0 + vY * time + 0.5 * gravity * (time**2)
+    return x, y
+
 def distance(x1, y1, x2, y2):
     return ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
+
+def gameOver():
+    pass
 
 # Start the game loop
 def main():
