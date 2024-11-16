@@ -12,8 +12,10 @@ def onAppStart(app):
     app.score = 0
     app.gameOver = False
     app.strikes = 0
+    app.exploding = False
     app.spawnCounter = 0
     app.fruitSpawnInterval = 100
+    app.explosionOpacity = 50
     app.elapsedTime = 0
     app.homeScreen = True
     loadImages(app)
@@ -85,6 +87,7 @@ class Fruit:
         leftSlice = SlicedFruit(self.app, self.x, self.y, leftSlicevX, self.vY, self.color, self.radius, self.time, 'Left')
         self.app.store.addSlicedFruit(rightSlice)
         self.app.store.addSlicedFruit(leftSlice)
+        self.app.store.addSplat(Splat(self.app, self.x, self.y, self.color))
 
 
 class SlicedFruit(Fruit):
@@ -108,9 +111,16 @@ class Bomb(Fruit):
         self.alignment = 'center'
 
     def slice(self):
-        self.app.store.removeBomb(self)
+        self.app.exploding = True
         # TODO: DO BOMB STUFFS
 
+class Splat:
+    def __init__(self, app, x, y, color):
+        self.app = app
+        self.x = x
+        self.y = y
+        self.color = 'Splat' + color[-1]
+        self.opacity = 100
 
 class FruitStore:
     def __init__(self):
@@ -135,6 +145,12 @@ class FruitStore:
     
     def addSplat(self, splat):
         self.splats.append(splat)
+    def reduceSplatOpacity(self, splat):
+        splat.opacity -= 5
+        if splat.opacity <= 0:
+            self.splats.remove(splat)
+    def getSplats(self):
+        return self.splats
 
     def addBomb(self, bomb):
         self.bombs.append(bomb)
@@ -151,7 +167,7 @@ class GameController:
         self.speedMultiplier = 1.0
 
     def createFruit(self):
-        color, radius = choice([('Fruit1', 80), ('Fruit2', 65), ('Fruit3', 75), ('Fruit4', 100), ('Bomb', 75)])
+        color, radius = choice([('Fruit1', 80), ('Fruit2', 65), ('Fruit3', 75), ('Fruit4', 100), ('Bomb', 50)])
         x = randint(radius, self.app.width - radius)
         y = self.app.height + radius
         vX = uniform(1, 4)
@@ -181,6 +197,8 @@ class GameController:
             bomb.move()
             if not bomb.inBounds():
                 self.store.removeBomb(bomb)
+        for splat in self.store.getSplats()[:]:
+            self.store.reduceSplatOpacity(splat)
                 
 
 
@@ -189,20 +207,36 @@ def redrawAll(app):
         drawFruit(app, slicedFruit)
     for fruit in app.store.getFruits():
         drawFruit(app, fruit)
+    for bomb in app.store.getBombs():
+        drawFruit(app, bomb)
+    for splat in app.store.getSplats():
+        drawSplat(app, splat)
     drawLives(app)
+    drawLabel(f'Score : {app.score}', 100, 50, size = 33)
+    if app.exploding:
+        drawRect(0, 0, app.width, app.height, fill='white', opacity=app.explosionOpacity)
+        
     if app.gameOver:
         drawLabel("Game Over!", app.width / 2, app.height / 2, size=60, align='center')
-    drawLabel(f'Score : {app.score}', 100, 50, size = 33)
-    
 
 def drawFruit(app, fruit):
     imageWidth, imageHeight = getImageSize(app.fruitImages[fruit.color])
+    if fruit.color == 'Bomb': 
+        imageWidth *= 2
+        imageHeight *= 2
     drawImage(app.fruitImages[fruit.color], fruit.x, fruit.y, width=imageWidth/2, height=imageHeight/2, align=fruit.alignment)
+    if fruit.color == 'Bomb' and app.exploding:
+        drawLabel("BOOM!", fruit.x, fruit.y, size=60, align='center')
+
+def drawSplat(app, splat):
+    imageWidth, imageHeight = getImageSize(app.fruitImages[splat.color])
+    drawImage(app.fruitImages[splat.color], splat.x, splat.y, width=imageWidth/2, height=imageHeight/2, align='center', opacity=splat.opacity)
 
 def drawLives(app):
-    x = 1090
+    x = app.width - 170
     y = 75
-    drawImage(app.guiImages[f'Strikes{app.strikes}'], x, y, align='center')
+    imageWidth, imageHeight = getImageSize(app.guiImages[f'Strikes{app.strikes}'])
+    drawImage(app.guiImages[f'Strikes{app.strikes}'], x, y, width=imageWidth*1.5, height=imageHeight*1.5, align='center')
 
 
 # Function to update the game state
@@ -222,7 +256,15 @@ def onStep(app):
         if app.fruitSpawnInterval < 50:
             app.fruitSpawnInterval = 50
     app.controller.updateFruits()
+    if app.exploding:
+        doExplosion(app)
 
+def doExplosion(app):
+    app.explosionOpacity += 4
+    if app.explosionOpacity >= 100:
+        app.explosionOpacity = 100
+        app.gameOver = True
+        gameOver()
 
 def getNumFruits(elapsedTime):
     if elapsedTime < 5:
@@ -239,6 +281,10 @@ def onMouseMove(app, mouseX, mouseY):
         if distance(fruit.x, fruit.y, mouseX, mouseY)  <= fruit.radius:
             fruit.slice()
             app.score += 5
+            break
+    for bomb in app.store.getBombs():
+        if distance(bomb.x, bomb.y, mouseX, mouseY)  <= bomb.radius:
+            bomb.slice()
             break
 
 def calculateProjectileMotion(x0, y0, vX, vY, gravity, time):
