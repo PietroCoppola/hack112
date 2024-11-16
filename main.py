@@ -1,22 +1,33 @@
 from cmu_graphics import *
 from random import randint, choice, uniform
+import os
 
 def onAppStart(app):
     app.width, app.height = 1280, 1024
     app.fruits = []
+    app.slicedFruits = []
     app.store = FruitStore()
     app.controller = GameController(app)
     app.stepsPerSecond = 30
     app.score = 0
     app.gameOver = False
-    app.strikes = 0
+    app.strikes = 2
     app.spawnCounter = 0
     app.fruitSpawnInterval = 100
     app.elapsedTime = 0
     app.homeScreen = True
+    app.images = {}
+    loadImages(app)
     
-def images(app):
-    pass
+def loadImages(app):
+    images_folder = './images'
+    for filename in os.listdir(images_folder):
+        if filename.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            image_name = os.path.splitext(filename)[0]
+            image_path = os.path.join(images_folder, filename)
+            app.images[image_name] = image_path
+
+
 # Fruit Object 
 class Fruit:
     def __init__(self, app, x, y, vX, vY, color, radius):
@@ -39,10 +50,46 @@ class Fruit:
         else: # Create initial push
             gravity = -75 / (1+self.time)
         self.x, self.y, = calculateProjectileMotion(self.x, self.y, self.vX, self.vY, gravity, self.time)
-# Store
+
+    def inBounds(self):
+        if self.time < 0.2:
+            return True
+        return (self.y - self.radius < self.app.height and 
+                self.x + self.radius > 0 and 
+                self.x - self.radius < self.app.width)
+    
+    def slice(self):
+        self.app.store.removeFruit(self)
+        speedDifference = uniform(0.1, 0.3)
+        if self.vX > 0:
+            rightSlicevX = self.vX * (1-speedDifference)
+            leftSlicevX = self.vX * (speedDifference)
+        else:
+            rightSlicevX = self.vX * (speedDifference)
+            leftSlicevX = self.vX * (1-speedDifference)
+        rightSlice = SlicedFruit(self.app, self.x, self.y, rightSlicevX, self.vY, self.color, self.radius)
+        leftSlice = SlicedFruit(self.app, self.x, self.y, leftSlicevX, self.vY, self.color, self.radius)
+        self.app.store.getSlicedFruits.append(rightSlice)
+        self.app.store.getSlicedFruits.append(leftSlice)
+
+class SlicedFruit(Fruit):
+    def __init__(self, app, x, y, vX, vY, color, radius):
+        self.app = app
+        self.x = x
+        self.y = y
+        self.vX = vX
+        self.vY = vY
+        self.color = color
+        self.radius = radius
+        
+    def slice(self):
+        pass
+        
+    
 class FruitStore:
     def __init__(self):
         self.fruits = []
+        self.slicedFruits = []
 
     def addFruit(self, fruit):
         self.fruits.append(fruit)
@@ -52,6 +99,9 @@ class FruitStore:
 
     def getFruits(self):
         return self.fruits
+    
+    def getSlicedFruits(self):
+        return self.slicedFruits
 
 # Controller
 class GameController:
@@ -76,10 +126,15 @@ class GameController:
     def updateFruits(self):
         for fruit in self.store.getFruits()[:]:
             fruit.move()
-            if (fruit.y - fruit.radius > self.app.height or  
-            fruit.x + fruit.radius < 0 or        
-            fruit.x - fruit.radius > self.app.width): 
+            if not fruit.inBounds():
+                app.strikes += 1
                 self.store.removeFruit(fruit)
+        for slicedFruit in self.store.getSlicedFruits()[:]:
+            slicedFruit.move()
+            if not slicedFruit.inBounds():
+                self.store.slicedFruit(fruit)
+                
+        
     # def adjustSpeed(self):
     #     fluctuation = uniform(0.95, 1.1)
     #     self.speedMultiplier *= fluctuation
@@ -94,7 +149,7 @@ def redrawAll(app):
     drawLives(app)
     if app.gameOver:
         drawLabel("Game Over!", app.width / 2, app.height / 2, size=60, align='center')
-    
+    drawLabel(f'Score:{app.score}', 100, 50, size = 25)
     
 
 def drawFruit(fruit):
@@ -103,21 +158,8 @@ def drawFruit(fruit):
 def drawLives(app):
     crossX = 1090
     crossY = 75
-    
-    # crossSpacing = 50
-    # for i in range(3):
-    #     if i < app.strikes:
-    #         drawRedCross(crossX + i* crossSpacing, crossY)
-    #     else:
-    #         drawHollowCross(crossX + i * crossSpacing, crossY)
-            
-# def drawRedCross(x, y):
-#     drawRect(x - 5, y - 20, 40, 15, fill='red', border='black', rotateAngle = 45, align = 'center')  
-#     drawRect(x - 5, y - 20, 40, 15, fill='red', border='black', rotateAngle = -45, align = 'center')
+    drawImage(app.images[f'Strikes{app.strikes}'], crossX, crossY, align='center')
 
-# def drawHollowCross(x, y):
-#     drawRect(x - 5, y - 20, 40, 15, fill = None, border='black', rotateAngle = 45, align = 'center')
-#     drawRect(x - 5, y - 20, 40, 15, fill = None, border='black', rotateAngle = -45, align = 'center')
 
 # Function to update the game state
 def onStep(app):
@@ -139,7 +181,7 @@ def onStep(app):
 def onMouseMove(app, mouseX, mouseY):
     for fruit in app.store.getFruits():
         if distance(fruit.x, fruit.y, mouseX, mouseY)  <= fruit.radius:
-            app.store.removeFruit(fruit)
+            fruit.slice()
             app.score += 5
             break
 
