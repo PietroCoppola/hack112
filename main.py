@@ -94,11 +94,11 @@ def drawFruit(fruit):
     drawCircle(fruit.x, fruit.y, fruit.radius, fill=fruit.color)
 
 # def drawLives(app):
-#     crossX = 20
-#     crossY = 
+#     crossX = 350
+#     crossY = 20
 #     for i in range(3):
 #         if i < app.strikes:
-#             drawRedCross()
+#             drawRedCross(crossX * i, crossY)
 #         else:
 #             drawHollowCross()
 
