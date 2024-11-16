@@ -11,22 +11,35 @@ def onAppStart(app):
     app.stepsPerSecond = 30
     app.score = 0
     app.gameOver = False
-    app.strikes = 2
+    app.strikes = 0
     app.spawnCounter = 0
     app.fruitSpawnInterval = 100
     app.elapsedTime = 0
     app.homeScreen = True
-    app.images = {}
     loadImages(app)
     
 def loadImages(app):
-    images_folder = './images'
-    for filename in os.listdir(images_folder):
+    app.fruitImages = {}
+    fruits_folder = './images/fruits'
+    app.dojoImages = {}
+    dojos_folder = './images/dojos'
+    app.guiImages = {}
+    gui_folder = './images/gui'
+    for filename in os.listdir(fruits_folder):
         if filename.endswith(('.png', '.jpg', '.jpeg', '.gif')):
             image_name = os.path.splitext(filename)[0]
-            image_path = os.path.join(images_folder, filename)
-            app.images[image_name] = image_path
-
+            image_path = os.path.join(fruits_folder, filename)
+            app.fruitImages[image_name] = image_path
+    for filename in os.listdir(dojos_folder):
+        if filename.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            image_name = os.path.splitext(filename)[0]
+            image_path = os.path.join(dojos_folder, filename)
+            app.dojoImages[image_name] = image_path
+    for filename in os.listdir(gui_folder):
+        if filename.endswith(('.png', '.jpg', '.jpeg', '.gif')):
+            image_name = os.path.splitext(filename)[0]
+            image_path = os.path.join(gui_folder, filename)
+            app.guiImages[image_name] = image_path
 
 # Fruit Object 
 class Fruit:
@@ -40,6 +53,7 @@ class Fruit:
         self.radius = radius
         self.time = 0
         self.app = app
+        self.alignment = 'center'
 
     def move(self):
         self.time += 1 / self.app.stepsPerSecond
@@ -67,21 +81,23 @@ class Fruit:
         else:
             rightSlicevX = self.vX * (speedDifference)
             leftSlicevX = self.vX * (1-speedDifference)
-        rightSlice = SlicedFruit(self.app, self.x, self.y, rightSlicevX, self.vY, self.color, self.radius)
-        leftSlice = SlicedFruit(self.app, self.x, self.y, leftSlicevX, self.vY, self.color, self.radius)
-        self.app.store.getSlicedFruits.append(rightSlice)
-        self.app.store.getSlicedFruits.append(leftSlice)
+        rightSlice = SlicedFruit(self.app, self.x, self.y, rightSlicevX, self.vY, self.color, self.radius, self.time, 'Right')
+        leftSlice = SlicedFruit(self.app, self.x, self.y, leftSlicevX, self.vY, self.color, self.radius, self.time, 'Left')
+        self.app.store.addSlicedFruit(rightSlice)
+        self.app.store.addSlicedFruit(leftSlice)
 
 class SlicedFruit(Fruit):
-    def __init__(self, app, x, y, vX, vY, color, radius):
+    def __init__(self, app, x, y, vX, vY, color, radius, time, side):
         self.app = app
         self.x = x
         self.y = y
         self.vX = vX
         self.vY = vY
-        self.color = color
+        self.color = side + color[-1]
         self.radius = radius
-        
+        self.time = time
+        self.alignment = 'right' if side == 'Left' else 'left'
+
     def slice(self):
         pass
         
@@ -94,8 +110,14 @@ class FruitStore:
     def addFruit(self, fruit):
         self.fruits.append(fruit)
 
+    def addSlicedFruit(self, slicedFruit):
+        self.slicedFruits.append(slicedFruit)
+
     def removeFruit(self, fruit):
         self.fruits.remove(fruit)
+
+    def removeSlicedFruit(self, slicedFruit):
+        self.slicedFruits.remove(slicedFruit)
 
     def getFruits(self):
         return self.fruits
@@ -114,11 +136,11 @@ class GameController:
         radius = 40
         x = randint(radius, self.app.width - radius)
         y = self.app.height + radius
-        vX = uniform(0.5, 2)
+        vX = uniform(1, 4)
         vY = (-randint(920, 972))/(self.app.stepsPerSecond)
         xCenter = self.app.width / 2
         vX *= (xCenter - x) / (self.app.width/2.5)
-        color = choice(['red', 'green', 'yellow', 'orange'])
+        color = choice(['Fruit1', 'Fruit2', 'Fruit3', 'Fruit4'])
         vY *= self.speedMultiplier
         fruit = Fruit(self.app, x, y, vX, vY, color, radius)
         self.store.addFruit(fruit)
@@ -127,12 +149,13 @@ class GameController:
         for fruit in self.store.getFruits()[:]:
             fruit.move()
             if not fruit.inBounds():
-                app.strikes += 1
+                self.app.strikes += 1
+                if self.app.strikes > 3: self.app.strikes = 3
                 self.store.removeFruit(fruit)
         for slicedFruit in self.store.getSlicedFruits()[:]:
             slicedFruit.move()
             if not slicedFruit.inBounds():
-                self.store.slicedFruit(fruit)
+                self.store.removeSlicedFruit(slicedFruit)
                 
         
     # def adjustSpeed(self):
@@ -144,21 +167,23 @@ class GameController:
 
 # TODO write redrawAll function
 def redrawAll(app):
+    for slicedFruit in app.store.getSlicedFruits():
+        drawFruit(app, slicedFruit)
     for fruit in app.store.getFruits():
-        drawFruit(fruit)
+        drawFruit(app, fruit)
     drawLives(app)
     if app.gameOver:
         drawLabel("Game Over!", app.width / 2, app.height / 2, size=60, align='center')
     drawLabel(f'Score:{app.score}', 100, 50, size = 25)
     
 
-def drawFruit(fruit):
-    drawCircle(fruit.x, fruit.y, fruit.radius, fill=fruit.color)
+def drawFruit(app, fruit):
+    drawImage(app.fruitImages[fruit.color], fruit.x, fruit.y, align=fruit.alignment)
 
 def drawLives(app):
     crossX = 1090
     crossY = 75
-    drawImage(app.images[f'Strikes{app.strikes}'], crossX, crossY, align='center')
+    drawImage(app.guiImages[f'Strikes{app.strikes}'], crossX, crossY, align='center')
 
 
 # Function to update the game state
