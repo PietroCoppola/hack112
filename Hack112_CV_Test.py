@@ -12,6 +12,7 @@ def hand_tracker(app):
     capture = cv.VideoCapture(0)
     mp_hands = mp.solutions.hands 
     mp_drawing = mp.solutions.drawing_utils
+    # For testing
     # mp_drawing_styles = mp.solutions.drawing_styles
     hands = mp_hands.Hands(
         static_image_mode = False,

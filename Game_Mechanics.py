@@ -9,8 +9,6 @@ def onAppStart(app):
 def setupMechanicsApp(app):
     setupModeApp(app)
     app.width, app.height = 1024, 1280
-    app.fruits = []
-    app.slicedFruits = []
     app.store = FruitStore()
     app.controller = GameController(app)
     app.stepsPerSecond = 30
@@ -19,6 +17,7 @@ def setupMechanicsApp(app):
     app.strikes = 0
     app.exploding = False
     app.spawnCounter = 0
+    # Defines how long it takes for a fruit to spawn in the beginning
     app.fruitSpawnInterval = 100
     app.explosionOpacity = 50
     app.elapsedTime = 0
@@ -27,17 +26,13 @@ def setupMechanicsApp(app):
     loadImages(app)
     
 def loadImages(app):
-    
-    '''app.dojoImages = {}
-    dojos_folder = './Images/Dojos/Preview'''
+    """
+    Looks for image files with extensions .png, .jpg, .jpeg, and .gif in the './images/gui' directory, 
+    then adds each image to the app.guiImages dict with the image name (without extension) as the key
+    and the image path as the value.
+    """
     app.guiImages = {}
     gui_folder = './images/gui'
-
-    '''for filename in os.listdir(dojos_folder):
-        if filename.endswith(('.png', '.jpg', '.jpeg', '.gif')):
-            image_name = os.path.splitext(filename)[0]
-            image_path = os.path.join(dojos_folder, filename)
-            app.dojoImages[image_name] = image_path'''
     for filename in os.listdir(gui_folder):
         if filename.endswith(('.png', '.jpg', '.jpeg', '.gif')):
             image_name = os.path.splitext(filename)[0]
@@ -45,6 +40,7 @@ def loadImages(app):
             app.guiImages[image_name] = image_path
 
 def loadFruits(app):
+    # Same as loadImages, but for fruit images.
     app.fruitImages = {}
     fruits_folder = './images/fruits' if app.gameMode == 'Fruit' else './images/fruits/Kosbie'
     for filename in os.listdir(fruits_folder):
@@ -55,12 +51,13 @@ def loadFruits(app):
 
 # Fruit Object 
 class Fruit:
-    def __init__(self, app, x, y, vX, vY, color, radius):
+    def __init__(self, app, x, y, velocityX, velocityY, color, radius):
         self.x = x
         self.y = y
-        self.vX = vX
-        self.vY = vY
+        self.vX = velocityX
+        self.vY = velocityY
         self.entryPoint = (x,y)
+        # Color is used for determining the image to be displayed
         self.color = color
         self.radius = radius
         self.time = 0
@@ -68,15 +65,16 @@ class Fruit:
         self.alignment = 'center'
 
     def move(self):
-        self.time += 1 / self.app.stepsPerSecond
-        if self.time >= .5:
+        self.time += 1 / self.app.stepsPerSecond # Increment time, expressed in seconds
+        if self.time >= .5: # Constant downward gravity
             gravity = 880 / self.app.stepsPerSecond
-        elif self.time >= 2.5:
+        elif self.time >= 2.5: # Terminal velocity
             gravity = 0
-        else: # Create initial push
+        else: # Create initial push, simulating an upward force (like in the original).
             gravity = -75 / (1+self.time)
         self.x, self.y, = calculateProjectileMotion(self.x, self.y, self.vX, self.vY, gravity, self.time)
 
+    # Check if the fruit is still on the screen
     def inBounds(self):
         if self.time < 0.2:
             return True
@@ -84,9 +82,12 @@ class Fruit:
                 self.x + self.radius > 0 and 
                 self.x - self.radius < self.app.width)
     
+    # Destroy self and create two new sliced fruits
     def slice(self):
         self.app.store.removeFruit(self)
+        # Randomize the speed of the two slices
         speedDifference = uniform(0.1, 0.3)
+        # Send slices in the correct directions, based on the original velocity
         if self.vX > 0:
             rightSlicevX = self.vX * (1-speedDifference) + 1
             leftSlicevX = self.vX * (speedDifference) - 1
@@ -97,8 +98,10 @@ class Fruit:
         leftSlice = SlicedFruit(self.app, self.x, self.y, leftSlicevX, self.vY, self.color, self.radius, self.time, 'Left')
         self.app.store.addSlicedFruit(rightSlice)
         self.app.store.addSlicedFruit(leftSlice)
+        # Create splat effect
         self.app.store.addSplat(Splat(self.app, self.x, self.y, self.color))
 
+# Sliced Fruit Object, inherits from Fruit, no collision detection 
 class SlicedFruit(Fruit):
     def __init__(self, app, x, y, vX, vY, color, radius, time, side):
         self.app = app
@@ -113,7 +116,8 @@ class SlicedFruit(Fruit):
 
     def slice(self):
         pass       
-    
+
+# Bomb Object, inherits from Fruit, on collision, explodes and ends the game
 class Bomb(Fruit):
     def __init__(self, app, x, y, vX, vY, color, radius):
         super().__init__(app, x, y, vX, vY, color, radius)
@@ -123,6 +127,7 @@ class Bomb(Fruit):
         self.app.exploding = True
         # TODO: DO BOMB STUFFS
 
+# Splatter Object, created when a fruit is sliced
 class Splat:
     def __init__(self, app, x, y, color):
         self.app = app
@@ -131,6 +136,7 @@ class Splat:
         self.color = 'Splat' + color[-1]
         self.opacity = 100
 
+# Store Object, contains all the fruits, sliced fruits, bombs, and splats
 class FruitStore:
     def __init__(self):
         self.fruits = []
@@ -168,6 +174,7 @@ class FruitStore:
     def getBombs(self):
         return self.bombs
 
+# Controller Object, handles the creation and updating of fruits
 class GameController:
     def __init__(self, app):
         self.store = app.store
@@ -193,23 +200,28 @@ class GameController:
     def updateFruits(self):
         for fruit in self.store.getFruits()[:]:
             fruit.move()
+            # If the fruit is out of bounds, remove it and increment strikes
             if not fruit.inBounds():
                 self.app.strikes += 1
                 if self.app.strikes > 3: self.app.strikes = 3
                 self.store.removeFruit(fruit)
+        # Update sliced fruits
         for slicedFruit in self.store.getSlicedFruits()[:]:
             slicedFruit.move()
             if not slicedFruit.inBounds():
                 self.store.removeSlicedFruit(slicedFruit)
+        # Update bombs
         for bomb in self.store.getBombs()[:]:
             bomb.move()
             if not bomb.inBounds():
                 self.store.removeBomb(bomb)
+        # Update splat opacity
         for splat in self.store.getSplats()[:]:
             self.store.reduceSplatOpacity(splat)
-                
-def redrawAll(app):
 
+# Function to draw the game. 
+# Written like this for easier integration with code structure while developing, kept for posterity.
+def redrawAll(app):
     drawMechanics(app)
 
 def drawMechanics(app):
@@ -221,16 +233,22 @@ def drawMechanics(app):
         drawFruit(app, bomb)
     for splat in app.store.getSplats():
         drawSplat(app, splat)
+
+    # Draw GUI elements
     drawLives(app)
     drawLabel(f'Score : {app.score}', 100, 50, size = 33, fill = app.textUIColor)
+
+    # Draw explosion effect (animated by doExplosion)
     if app.exploding:
         drawRect(0, 0, app.width, app.height, fill='white', opacity=app.explosionOpacity)
-        
+
+    # Draw game over screen  
     if app.gameOver:
         gameOverPath = app.guiImages[f'GameOver']
         imageWidth, imageHeight = getImageSize(gameOverPath)
         drawImage(gameOverPath, app.width / 2, app.height / 2, align='center')
 
+# Draw the dojo selected by the player.
 def drawBackground(app):
     dojoPath = f'./images/dojos/background/{app.selectedDojoScreen}.png' if app.currentScreen == 'FruitMode' else f'./images/dojos/background/Dojo1.png'
     imageWidth, imageHeight = getImageSize(dojoPath)
@@ -238,9 +256,11 @@ def drawBackground(app):
     correctedWidth = (imageWidth * correctedHeight) / imageHeight
     drawImage(dojoPath, app.width/2, app.height/2, width=correctedWidth, height=correctedHeight, align='center')
 
+# Draw fruits (including bombs)
 def drawFruit(app, fruit):
     imageWidth, imageHeight = getImageSize(app.fruitImages[fruit.color])
     if fruit.color == 'Bomb': 
+        # Adjust image dimensions due to file size difference
         imageWidth *= 2
         imageHeight *= 2
     drawImage(app.fruitImages[fruit.color], fruit.x, fruit.y, width=imageWidth/2, height=imageHeight/2, align=fruit.alignment)
@@ -251,10 +271,12 @@ def drawFruit(app, fruit):
             label = 'AIV!'
         drawLabel(label, fruit.x, fruit.y, size=60, align='center')
 
+# Draw splats (opacity handled by controller)
 def drawSplat(app, splat):
     imageWidth, imageHeight = getImageSize(app.fruitImages[splat.color])
     drawImage(app.fruitImages[splat.color], splat.x, splat.y, width=imageWidth/2, height=imageHeight/2, align='center', opacity=splat.opacity)
 
+# Draw the number of lives the player has left/how many strikes they have
 def drawLives(app):
     x = app.width - 170
     y = 75
@@ -265,12 +287,12 @@ def drawLives(app):
 def onStep(app):
     takeMechanicsStep(app)
 
+# Main game loop updater
 def takeMechanicsStep(app):
     checkCollision(app)
     if app.strikes >= 3:
         app.gameOver = True
-        gameOver()
-
+    # Time in seconds
     app.elapsedTime += 1/app.stepsPerSecond
     app.spawnCounter += 1
     if app.spawnCounter >= app.fruitSpawnInterval:
@@ -279,19 +301,22 @@ def takeMechanicsStep(app):
             app.controller.createFruit()
         app.spawnCounter = 0 
         app.fruitSpawnInterval -= 20 # 20 is for demo purposes; ordinarily would've been 5 or 10.
+        # Cap spawn speed at 40
         if app.fruitSpawnInterval < 40:
             app.fruitSpawnInterval = 40
     app.controller.updateFruits()
+    
     if app.exploding:
         doExplosion(app)
 
+# Handle the explosion effect
 def doExplosion(app):
     app.explosionOpacity += 4
     if app.explosionOpacity >= 100:
         app.explosionOpacity = 100
         app.gameOver = True
-        gameOver()
 
+# Returns the number of fruits to spawn based on the elapsed time
 def getNumFruits(elapsedTime):
     if elapsedTime < 5:
         return 1
@@ -302,39 +327,45 @@ def getNumFruits(elapsedTime):
     elif elapsedTime > 40:
         return randint(1, 4)
 
+# Check if a fruit is being sliced or if a bomb is being hit
 def checkCollision(app):
     for fruit in app.store.getFruits():
-            if len(app.pastCoords) > 1:
-                x1 = app.pastCoords[-1][0] * app.width
-                y1 = app.pastCoords[-1][1] * app.height
-                x2 = app.pastCoords[-2][0] * app.width
-                y2 = app.pastCoords[-2][1] * app.height
-                if (distance(fruit.x, fruit.y, x1, y1)  <= fruit.radius) or (distance(fruit.x, fruit.y, x2, y2)  <= fruit.radius):
-                    fruit.slice()
-                    app.score += 5
-                    break
-    for bomb in app.store.getBombs():
         if len(app.pastCoords) > 1:
+            # Handle fast hand movements
             x1 = app.pastCoords[-1][0] * app.width
             y1 = app.pastCoords[-1][1] * app.height
             x2 = app.pastCoords[-2][0] * app.width
             y2 = app.pastCoords[-2][1] * app.height
+            # Check collision
+            if (distance(fruit.x, fruit.y, x1, y1)  <= fruit.radius) or (distance(fruit.x, fruit.y, x2, y2)  <= fruit.radius):
+                fruit.slice()
+                app.score += 5
+                break
+    for bomb in app.store.getBombs():
+        if len(app.pastCoords) > 1:
+            # Handle fast hand movements
+            x1 = app.pastCoords[-1][0] * app.width
+            y1 = app.pastCoords[-1][1] * app.height
+            x2 = app.pastCoords[-2][0] * app.width
+            y2 = app.pastCoords[-2][1] * app.height
+            # Check collision
             if (distance(bomb.x, bomb.y, x1, y1)  <= bomb.radius) or (distance(bomb.x, bomb.y, x2, y2)  <= bomb.radius):
                 bomb.slice()
                 break
 
+# Calculate the new position of a projectile based on gravity
 def calculateProjectileMotion(x0, y0, vX, vY, gravity, time):
     x = x0 + vX * time
     y = y0 + vY * time + 0.5 * gravity * (time**2)
     return x, y
 
+# Calculate the distance between two points
 def distance(x1, y1, x2, y2):
     return ((x2 - x1) ** 2 + (y2 - y1) ** 2) ** 0.5
-
-def gameOver():
-    pass
 
 # Start the game loop
 def main():
     runApp()
-# main() s
+
+# For testing
+# main()
