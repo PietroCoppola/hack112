@@ -8,10 +8,8 @@ from Default_Mode_Screen import *
 from Hack112_CV_Test import *
 from Game_Mechanics import *
 
+
 def onAppStart(app):
-    # app.uiColor = rgb(247, 182, 63)
-    app.borderUIColor = rgb(245,156,52)
-    app.textUIColor = rgb(250, 226, 83)
     reset(app)
     app.width, app.height = 1024, 1280 # width//2 = 512; height//2 = 640
     
@@ -40,7 +38,6 @@ def drawCurrentScreen(app):
         drawDefaultModeScreen(app)
 
 def onMousePress(app, mouseX, mouseY):
-    print(mouseX, mouseY)
     checkCurrentClicks(app, mouseX, mouseY)
 
 def checkCurrentClicks(app, mouseX, mouseY):
